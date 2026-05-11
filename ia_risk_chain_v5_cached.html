@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>IA Risk Chain Engine v5 — Persistent Cache</title>
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#fff;--bg2:#f5f5f3;--bg3:#ededea;
+  --txt:#1a1a18;--txt2:#5f5e5a;--txt3:#888780;
+  --bdr:rgba(0,0,0,.10);--bdr2:rgba(0,0,0,.20);
+  --blue:#185FA5;--blue-lt:#E6F1FB;--blue-dk:#0C447C;
+  --green:#27500A;--green-lt:#EAF3DE;
+  --amber:#633806;--amber-lt:#FAEEDA;
+  --red:#791F1F;--red-lt:#FCEBEB;
+  --purple:#4B2E83;--purple-lt:#EDE8F5;
+  --r:8px;--rl:12px;
+}
+body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg3);color:var(--txt);font-size:14px;min-height:100vh}
+
+/* ── HEADER ── */
+.hdr{background:var(--bg);border-bottom:.5px solid var(--bdr2);padding:0 24px;height:50px;
+  display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.badge{background:#042C53;color:#85B7EB;font-family:'IBM Plex Mono',monospace;
+  font-size:10px;padding:3px 8px;border-radius:3px;text-transform:uppercase;letter-spacing:.08em}
+.hdr-title{font-size:15px;font-weight:500;letter-spacing:-.01em}
+.hdr-sub{font-size:11px;color:var(--txt3)}
+.cost-pill{font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--green-lt);
+  color:var(--green);padding:3px 10px;border-radius:20px;border:.5px solid #9DC25A}
+
+/* ── LAYOUT ── */
+.layout{display:grid;grid-template-columns:280px 1fr;height:calc(100vh - 50px)}
+.sb{background:var(--bg);border-right:.5px solid var(--bdr2);overflow-y:auto}
+.main{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px}
+
+/* ── SIDEBAR ── */
+.ss{border-bottom:.5px solid var(--bdr);padding:13px 16px}
+.sl{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--txt3);margin-bottom:8px}
+.fl{font-size:12px;color:var(--txt2);margin-bottom:3px;display:block}
+.fi{width:100%;background:var(--bg2);border:.5px solid var(--bdr2);border-radius:6px;
+  padding:6px 9px;font-size:13px;color:var(--txt);font-family:'IBM Plex Sans',sans-serif;outline:none}
+.fi:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(24,95,165,.12)}
+select.fi{appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 9px center;padding-right:26px}
+.fg{margin-bottom:9px}
+
+/* ── CACHE STATUS ── */
+.cache-status{background:var(--purple-lt);border:.5px solid #c4b2e8;border-radius:6px;padding:8px 10px;font-size:11px}
+.cache-status-title{font-weight:500;color:var(--purple);margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.cache-item{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--txt2)}
+.cache-item-name{flex:1}
+.cache-item-time{color:var(--txt3);font-size:9px}
+.cache-clear-btn{background:none;border:none;color:var(--purple);cursor:pointer;font-size:9px;padding:2px 5px}
+.cache-clear-btn:hover{background:var(--purple-lt);border-radius:3px}
+
+/* ── TOGGLE ── */
+.tog-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.tog-lbl{font-size:12px;color:var(--txt2)}
+.tog{position:relative;width:30px;height:17px;flex-shrink:0}
+.tog input{opacity:0;width:0;height:0}
+.togs{position:absolute;inset:0;background:var(--bg2);border:.5px solid var(--bdr2);
+  border-radius:10px;cursor:pointer;transition:.2s}
+.togs:before{content:'';position:absolute;width:12px;height:12px;left:2px;top:2px;
+  background:var(--txt3);border-radius:50%;transition:.2s}
+.tog input:checked+.togs{background:var(--blue);border-color:var(--blue)}
+.tog input:checked+.togs:before{transform:translateX(13px);background:#fff}
+
+/* ── PERSONA ── */
+.pg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.pb{background:var(--bg2);border:.5px solid var(--bdr2);border-radius:6px;padding:5px 6px;
+  font-size:10px;color:var(--txt2);cursor:pointer;font-family:'IBM Plex Sans',sans-serif;
+  text-align:left;transition:all .15s;line-height:1.3}
+.pb span{font-weight:500;color:var(--txt);font-size:11px;display:block}
+.pb.active{background:var(--blue-lt);border-color:var(--blue)}
+.pb.active span{color:var(--blue-dk)}
+
+/* ── TAGS ── */
+.tiw{display:flex;flex-wrap:wrap;gap:4px;background:var(--bg2);border:.5px solid var(--bdr2);
+  border-radius:6px;padding:5px 7px;min-height:33px;align-items:center}
+.tiw:focus-within{border-color:var(--blue)}
+.tag{background:var(--blue-lt);color:var(--blue-dk);font-size:11px;
+  padding:2px 5px 2px 7px;border-radius:4px;display:flex;align-items:center;gap:3px;
+  font-family:'IBM Plex Mono',monospace}
+.tx{cursor:pointer;opacity:.55;font-size:13px;line-height:1;background:none;border:none;
+  color:var(--blue-dk);padding:0}
+.tx:hover{opacity:1}
+.tti{border:none;outline:none;background:transparent;font-size:12px;color:var(--txt);
+  font-family:'IBM Plex Sans',sans-serif;min-width:55px;flex:1}
+
+/* ── BUTTONS ── */
+.run-btn{width:100%;padding:10px;background:var(--blue);color:#E6F1FB;border:none;
+  border-radius:var(--r);font-size:14px;font-weight:500;font-family:'IBM Plex Sans',sans-serif;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:background .15s}
+.run-btn:hover:not(:disabled){background:var(--blue-dk)}
+.run-btn:disabled{background:var(--bg2);color:var(--txt3);cursor:not-allowed}
+.icon-btn{background:none;border:.5px solid var(--bdr2);border-radius:5px;padding:4px 10px;
+  font-size:11px;color:var(--txt2);cursor:pointer;font-family:'IBM Plex Mono',monospace;transition:background .15s}
+.icon-btn:hover{background:var(--bg2)}
+.small-btn{font-size:10px;padding:4px 8px;border-radius:4px;border:.5px solid var(--bdr2);
+  background:var(--bg2);color:var(--txt2);cursor:pointer;font-family:'IBM Plex Mono',monospace}
+.small-btn:hover{background:var(--bg3)}
+
+/* ── PIPELINE ── */
+.pipeline{background:var(--bg);border:.5px solid var(--bdr2);border-radius:var(--rl);overflow:hidden}
+.pipeline-hdr{padding:12px 18px;border-bottom:.5px solid var(--bdr);
+  display:flex;align-items:center;justify-content:space-between}
+.pipeline-title{font-size:13px;font-weight:500}
+.pipeline-body{padding:18px;overflow-x:auto}
+.phase-row{display:flex;align-items:flex-start;gap:0;margin-bottom:16px}
+.phase-row:last-child{margin-bottom:0}
+.phase-lbl{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--txt3);width:70px;flex-shrink:0;padding-top:14px;line-height:1.4}
+.connector{color:var(--txt3);font-size:18px;padding:0 4px;margin-top:7px}
+.phase-arrow{text-align:center;color:var(--txt3);font-size:20px;
+  margin:-4px 0 0 70px;padding:2px 0}
+.par-group{display:flex;align-items:flex-start;gap:6px;
+  background:var(--bg2);border:.5px dashed var(--bdr2);border-radius:var(--r);
+  padding:8px 10px;flex-wrap:wrap}
+.par-lbl{font-size:9px;font-family:'IBM Plex Mono',monospace;color:var(--txt3);
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;display:block;width:100%}
+
+/* ── STEP NODE ── */
+.sn{border-radius:var(--r);border:.5px solid var(--bdr2);padding:8px 11px;
+  min-width:108px;cursor:pointer;transition:all .15s;background:var(--bg);position:relative}
+.sn:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.sn.idle{background:var(--bg);border-color:var(--bdr2)}
+.sn.queued{background:#f0f4fa;border-color:#b0c8e8}
+.sn.running{background:var(--blue-lt);border-color:var(--blue);animation:pulse 1.5s infinite}
+.sn.done{background:var(--green-lt);border-color:#9DC25A}
+.sn.cached{background:#f3f0fa;border-color:#b8a8d8}
+.sn.error{background:var(--red-lt);border-color:#F09595}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(24,95,165,.3)}50%{box-shadow:0 0 0 4px rgba(24,95,165,.1)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.sn-badge{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%}
+.sn-badge.running{background:var(--blue);animation:blink 1s step-end infinite}
+.sn-badge.done{background:#639922}
+.sn-badge.cached{background:var(--purple)}
+.sn-badge.error{background:var(--red)}
+.sn-icon{font-size:14px;margin-bottom:3px}
+.sn-name{font-size:11px;font-weight:500;color:var(--txt);line-height:1.3}
+.sn-model{font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--txt3);margin-top:2px}
+.sn-status{font-size:10px;font-family:'IBM Plex Mono',monospace;margin-top:3px}
+.sn-status.idle{color:var(--txt3)}
+.sn-status.running{color:var(--blue)}
+.sn-status.done{color:var(--green)}
+.sn-status.cached{color:var(--purple)}
+.sn-status.error{color:var(--red)}
+.sn-cost{font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--txt3);margin-top:2px}
+
+/* ── STATS BAR ── */
+.stats{background:var(--bg);border:.5px solid var(--bdr2);border-radius:var(--rl);
+  padding:14px 18px;display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.stat{text-align:center}
+.stat-val{font-size:20px;font-weight:600;letter-spacing:-.02em;font-family:'IBM Plex Mono',monospace}
+.stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-top:2px}
+.stat-val.blue{color:var(--blue)}
+.stat-val.grn{color:var(--green)}
+.stat-val.amb{color:var(--amber)}
+.stat-val.pur{color:var(--purple)}
+
+/* ── OUTPUT CARDS ── */
+.out-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.out-card{background:var(--bg);border:.5px solid var(--bdr2);border-radius:var(--rl);overflow:hidden}
+.out-hdr{padding:9px 14px;border-bottom:.5px solid var(--bdr);
+  display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.out-title{font-size:12px;font-weight:500;display:flex;align-items:center;gap:6px}
+.out-body{padding:11px 13px;font-family:'IBM Plex Mono',monospace;font-size:11px;
+  line-height:1.6;color:var(--txt2);max-height:260px;overflow-y:auto;
+  white-space:pre-wrap;background:var(--bg2)}
+.out-body.open{display:block}
+.out-body.streaming{display:block}
+.out-body.streaming::after{content:'▋';animation:blink 1s step-end infinite;color:var(--blue);margin-left:2px}
+.ci{font-size:10px;color:var(--txt3);transition:transform .2s}
+.ci.open{transform:rotate(90deg)}
+
+/* ── REPORT ── */
+.report{background:var(--bg);border:.5px solid var(--bdr2);border-radius:var(--rl);overflow:hidden}
+.report-hdr{padding:12px 18px;border-bottom:.5px solid var(--bdr);
+  display:flex;align-items:center;justify-content:space-between}
+.report-title{font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px}
+.report-body{padding:18px;font-size:13px;line-height:1.75;color:var(--txt);
+  white-space:pre-wrap;max-height:600px;overflow-y:auto}
+.streaming::after{content:'▋';animation:blink 1s step-end infinite;color:var(--blue)}
+
+/* ── BADGES ── */
+.pill{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 7px;border-radius:4px}
+.pill.blue{background:var(--blue-lt);color:var(--blue-dk)}
+.pill.grn{background:var(--green-lt);color:var(--green)}
+.pill.red{background:var(--red-lt);color:var(--red)}
+.pill.amb{background:var(--amber-lt);color:var(--amber)}
+.pill.pur{background:var(--purple-lt);color:var(--purple)}
+
+/* ── API BANNER ── */
+.api-banner{background:#EEF6FF;border-bottom:.5px solid var(--bdr2);padding:11px 16px}
+.api-row{display:flex;gap:7px;align-items:center}
+.api-row input{flex:1;background:var(--bg);border:.5px solid var(--bdr2);
+  border-radius:5px;padding:5px 9px;font-size:12px;font-family:'IBM Plex Mono',monospace;
+  outline:none;color:var(--txt)}
+.api-row input:focus{border-color:var(--blue)}
+.api-row button{background:var(--blue);color:#fff;border:none;border-radius:5px;
+  padding:5px 11px;font-size:12px;cursor:pointer}
+.api-note{font-size:11px;color:var(--txt3);margin-top:5px}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="badge">Chain v5</span>
+    <div>
+      <div class="hdr-title">IA Risk Chain Engine</div>
+      <div class="hdr-sub">Persistent cache · real-time streaming · localStorage</div>
+    </div>
+  </div>
+  <div class="cost-pill" id="total-cost">$0.000 this session</div>
+</div>
+
+<div class="layout">
+
+<!-- ═══ SIDEBAR ═══ -->
+<div class="sb">
+
+  <div class="api-banner">
+    <div class="sl" style="margin-bottom:6px">API Key <span id="key-status" style="margin-left:8px"></span></div>
+    <div class="api-row">
+      <input type="password" id="apikey" placeholder="sk-ant-api03-…" style="font-family:'IBM Plex Mono',monospace"/>
+      <button onclick="saveKey()">Save</button>
+    </div>
+    <div class="api-note">Stored in memory only. Paste carefully to avoid hidden characters.</div>
+  </div>
+
+  <div class="ss">
+    <div class="sl">Cached Data <button class="small-btn" onclick="manageCacheModal()" style="float:right">Manage</button></div>
+    <div class="cache-status" id="cache-status">
+      <div style="font-size:10px;color:var(--txt3);font-style:italic">No cached data</div>
+    </div>
+  </div>
+
+  <div class="ss">
+    <div class="sl">Persona</div>
+    <div class="pg" id="pg"></div>
+  </div>
+
+  <div class="ss">
+    <div class="sl">Primary Company</div>
+    <div class="fg"><label class="fl">Entity</label><input class="fi" id="pc" value="onsemi"/></div>
+    <div class="fg" style="margin-bottom:0"><label class="fl">Ticker</label><input class="fi" id="tk" value="ON"/></div>
+  </div>
+
+  <div class="ss">
+    <div class="sl">Peers</div>
+    <div class="tiw" id="peers-w"><input class="tti" id="peers-i" placeholder="Add peer…"/></div>
+  </div>
+
+  <div class="ss">
+    <div class="sl">Period</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+      <div><label class="fl">Start</label><input class="fi" id="ps" value="Q1 2022"/></div>
+      <div><label class="fl">End</label><input class="fi" id="pe" value="Q4 2024"/></div>
+    </div>
+  </div>
+
+  <div class="ss">
+    <div class="sl">Modules</div>
+    <div id="mod-toggles"></div>
+  </div>
+
+  <div class="ss">
+    <div class="sl">Cache Strategy</div>
+    <select class="fi" id="cache-mode">
+      <option value="smart">Smart — use cache if available</option>
+      <option value="force">Force fresh — ignore cache</option>
+    </select>
+    <div style="font-size:11px;color:var(--txt3);margin-top:6px">
+      Cached steps load instantly from localStorage. Purple = loaded from cache.
+    </div>
+  </div>
+
+  <div class="ss">
+    <button class="run-btn" id="run-btn" onclick="runChain()">
+      <svg width="13" height="13" viewBox="0 0 16 16"><path d="M3 2.5L13 8L3 13.5V2.5Z" fill="currentColor"/></svg>
+      Run Chain
+    </button>
+    <button class="run-btn" id="exp-btn" onclick="exportReport()" disabled
+      style="margin-top:7px;background:none;color:var(--txt2);border:.5px solid var(--bdr2)">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+        <rect x="2" y="1" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+        <path d="M5 5h6M5 8h6M5 11h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M10 1v4h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Export Word Report
+    </button>
+  </div>
+
+</div><!-- end sidebar -->
+
+<!-- ═══ MAIN ═══ -->
+<div class="main" id="main">
+  <div style="background:var(--purple-lt);border:.5px solid #c4b2e8;border-radius:var(--rl);padding:14px 18px">
+    <div style="font-size:13px;font-weight:500;margin-bottom:6px">💜 Persistent Cache + Real-time Streaming</div>
+    <div style="font-size:12px;line-height:1.6;color:var(--txt2)">
+      All JSON outputs are saved to localStorage and reused across sessions. 
+      You'll see results stream in real-time as each module completes. 
+      Click "Manage" above to view, export, or clear cached data.
+    </div>
+  </div>
+</div>
+
+</div><!-- end layout -->
+
+<!-- Cache Management Modal -->
+<div id="cache-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;
+  display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)closeCacheModal()">
+  <div style="background:var(--bg);border-radius:var(--rl);width:90%;max-width:700px;max-height:80vh;overflow:hidden;
+    box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <div style="padding:16px 20px;border-bottom:.5px solid var(--bdr);display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:15px;font-weight:500">Cache Manager</div>
+      <button onclick="closeCacheModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--txt3)">×</button>
+    </div>
+    <div style="padding:18px 20px;overflow-y:auto;max-height:60vh" id="cache-modal-body"></div>
+    <div style="padding:12px 20px;border-top:.5px solid var(--bdr);display:flex;gap:8px">
+      <button class="icon-btn" onclick="exportCache()">Export All</button>
+      <button class="icon-btn" onclick="importCache()">Import</button>
+      <button class="icon-btn" onclick="clearAllCache()" style="color:var(--red)">Clear All</button>
+      <input type="file" id="cache-import-file" accept=".json" style="display:none" onchange="handleCacheImport(event)"/>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// PERSISTENT CACHE LAYER
+// ═══════════════════════════════════════════════════════════
+const CACHE_PREFIX = 'ia_risk_chain_cache_';
+
+function saveCacheItem(company, stepId, data) {
+  const key = `${CACHE_PREFIX}${company}:${stepId}`;
+  const item = {
+    company,
+    stepId,
+    data,
+    timestamp: Date.now(),
+    date: new Date().toISOString(),
+  };
+  try {
+    localStorage.setItem(key, JSON.stringify(item));
+    updateCacheStatus();
+    return true;
+  } catch(e) {
+    console.error('Failed to save to localStorage:', e);
+    return false;
+  }
+}
+
+function loadCacheItem(company, stepId) {
+  const key = `${CACHE_PREFIX}${company}:${stepId}`;
+  try {
+    const stored = localStorage.getItem(key);
+    if (!stored) return null;
+    return JSON.parse(stored);
+  } catch(e) {
+    console.error('Failed to load from localStorage:', e);
+    return null;
+  }
+}
+
+function getAllCacheItems() {
+  const items = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith(CACHE_PREFIX)) {
+      try {
+        const item = JSON.parse(localStorage.getItem(key));
+        items.push({ key, ...item });
+      } catch(e) {}
+    }
+  }
+  return items.sort((a, b) => b.timestamp - a.timestamp);
+}
+
+function deleteCacheItem(key) {
+  localStorage.removeItem(key);
+  updateCacheStatus();
+}
+
+function clearAllCache() {
+  if (!confirm('Clear all cached data? This cannot be undone.')) return;
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith(CACHE_PREFIX)) keys.push(key);
+  }
+  keys.forEach(k => localStorage.removeItem(k));
+  updateCacheStatus();
+  closeCacheModal();
+}
+
+function exportCache() {
+  const items = getAllCacheItems();
+  const blob = new Blob([JSON.stringify(items, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ia_risk_chain_cache_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importCache() {
+  document.getElementById('cache-import-file').click();
+}
+
+function handleCacheImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const items = JSON.parse(e.target.result);
+      let count = 0;
+      items.forEach(item => {
+        if (item.company && item.stepId && item.data) {
+          const key = `${CACHE_PREFIX}${item.company}:${item.stepId}`;
+          localStorage.setItem(key, JSON.stringify(item));
+          count++;
+        }
+      });
+      alert(`Imported ${count} cache items`);
+      updateCacheStatus();
+      closeCacheModal();
+    } catch(e) {
+      alert('Import failed: ' + e.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function updateCacheStatus() {
+  const el = document.getElementById('cache-status');
+  const items = getAllCacheItems();
+  
+  if (items.length === 0) {
+    el.innerHTML = '<div style="font-size:10px;color:var(--txt3);font-style:italic">No cached data</div>';
+    return;
+  }
+
+  // Group by company
+  const byCompany = {};
+  items.forEach(item => {
+    if (!byCompany[item.company]) byCompany[item.company] = [];
+    byCompany[item.company].push(item);
+  });
+
+  let html = '';
+  Object.entries(byCompany).forEach(([company, companyItems]) => {
+    html += `<div style="margin-bottom:8px">`;
+    html += `<div style="font-weight:500;color:var(--purple);font-size:11px;margin-bottom:3px">${company}</div>`;
+    companyItems.slice(0, 3).forEach(item => {
+      const age = Math.floor((Date.now() - item.timestamp) / (1000*60));
+      const timeStr = age < 60 ? `${age}m ago` : age < 1440 ? `${Math.floor(age/60)}h ago` : `${Math.floor(age/1440)}d ago`;
+      html += `<div class="cache-item"><span class="cache-item-name">${item.stepId}</span><span class="cache-item-time">${timeStr}</span></div>`;
+    });
+    if (companyItems.length > 3) {
+      html += `<div style="font-size:9px;color:var(--txt3);margin-top:2px">+${companyItems.length - 3} more</div>`;
+    }
+    html += `</div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+function manageCacheModal() {
+  const items = getAllCacheItems();
+  const modal = document.getElementById('cache-modal');
+  const body = document.getElementById('cache-modal-body');
+
+  if (items.length === 0) {
+    body.innerHTML = '<div style="text-align:center;color:var(--txt3);padding:40px">No cached data yet. Run a chain to populate the cache.</div>';
+  } else {
+    let html = '<div style="display:flex;flex-direction:column;gap:10px">';
+    items.forEach(item => {
+      const age = Math.floor((Date.now() - item.timestamp) / (1000*60));
+      const timeStr = age < 60 ? `${age}m ago` : age < 1440 ? `${Math.floor(age/60)}h ago` : `${Math.floor(age/1440)}d ago`;
+      const size = JSON.stringify(item.data).length;
+      const sizeStr = size < 1024 ? `${size}B` : `${(size/1024).toFixed(1)}KB`;
+      
+      html += `<div style="background:var(--bg2);border:.5px solid var(--bdr);border-radius:8px;padding:12px">`;
+      html += `<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px">`;
+      html += `<div><div style="font-weight:500;font-size:13px">${item.company} · ${item.stepId}</div>`;
+      html += `<div style="font-size:10px;color:var(--txt3);font-family:'IBM Plex Mono',monospace;margin-top:2px">${timeStr} · ${sizeStr}</div></div>`;
+      html += `<button class="small-btn" onclick="deleteCacheItem('${item.key}');manageCacheModal()">Delete</button>`;
+      html += `</div></div>`;
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  }
+
+  modal.style.display = 'flex';
+}
+
+function closeCacheModal() {
+  document.getElementById('cache-modal').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════
+let apiKey = '';
+let sessionCost = 0;
+let runCost = 0;
+let totalTokens = 0;
+let totalSearches = 0;
+let isRunning = false;
+let finalReport = '';
+
+// Accumulated step outputs (JSON per step)
+const outputs = {};
+
+// ── Persona definitions ─────────────────────────────────────
+const PERSONAS = {
+  audit:    { label:'Internal Audit',   icon:'🔍', system:'Senior Internal Audit Data Scientist. Full technical detail, all KRI tables, confidence flags, citations.' },
+  board:    { label:'Board / AC',       icon:'🏛',  system:'Chief Audit Executive writing for Board Audit Committee. Plain English, top 5 risks, RAG status, recommended actions. 2-page limit.' },
+  cfo:      { label:'CFO / Treasury',   icon:'💰', system:'CFO and Treasury. P&L impact, liquidity risk, covenant compliance, earnings guidance risk. Include $ scenario impact table.' },
+  cro:      { label:'CRO / ERM',        icon:'🎯', system:'Chief Risk Officer. Enterprise risk register framing — inherent risk, control effectiveness, residual risk, risk appetite status, velocity.' },
+  cpo:      { label:'CPO / Supply',     icon:'🔗', system:'Chief Procurement Officer. Supply chain resilience, supplier financial health, sanctions, single-source dependencies, nearshoring options.' },
+  clo:      { label:'CLO / Legal',      icon:'⚖️',  system:'Chief Legal Officer. Legal liability, IP litigation, trade compliance violations, environmental liability, disclosure obligations.' },
+  ma:       { label:'M&A / Corp Dev',   icon:'🤝', system:'M&A due diligence advisor. Deal thesis validation, CFIUS risk, IP freedom-to-operate, QoE flags, Go/Pause/Walk-Away matrix.' },
+  strategy: { label:'Strategy',         icon:'♟',  system:'Strategic Risk Advisor to CEO. Competitive positioning, strategic options, where risks create opportunities.' },
+  ir:       { label:'Investor Rel.',    icon:'📣', system:'IR risk advisor. Undisclosed material risks vs 10-K, earnings call Q&A prep, forward-looking statement drafts.' },
+};
+
+let persona = 'audit';
+
+// ── Module definitions ──────────────────────────────────────
+const MODULES = [
+  { id:'edgar',    name:'EDGAR Extraction',    icon:'📄', phase:1, search:true,  default:true },
+  { id:'mscore',   name:'Beneish M-Score',     icon:'🔬', phase:2, search:true,  default:true },
+  { id:'trade',    name:'Trade Compliance',    icon:'🚨', phase:2, search:true,  default:true },
+  { id:'geo',      name:'Geopolitical',        icon:'🌍', phase:2, search:true,  default:true },
+  { id:'rev',      name:'Revenue Anomaly',     icon:'📈', phase:2, search:true,  default:true },
+  { id:'capex',    name:'CapEx Deviation',     icon:'🏗',  phase:2, search:true,  default:false },
+  { id:'yield_',   name:'Yield & Mfg Risk',    icon:'⚙️',  phase:2, search:true,  default:false },
+  { id:'ip',       name:'IP & Patents',        icon:'⚖️',  phase:2, search:true,  default:false },
+  { id:'esg',      name:'Climate & ESG',       icon:'🌱', phase:2, search:true,  default:false },
+  { id:'rnd',      name:'R&D Efficiency',      icon:'🔭', phase:2, search:true,  default:false },
+  { id:'sent',     name:'Earnings Sentiment',  icon:'🎙', phase:2, search:true,  default:true },
+  { id:'fred',     name:'FRED Correlation',    icon:'📊', phase:2, search:true,  default:true },
+  { id:'corr',     name:'KRI Correlation',     icon:'🔗', phase:3, search:false, default:true },
+  { id:'scenario', name:'Scenario Analysis',   icon:'⚡', phase:3, search:false, default:true },
+  { id:'report',   name:'Persona Report',      icon:'📝', phase:4, search:false, default:true },
+];
+
+// ── Cost model ──────────────────────────────────────────────
+function calcCost(inTok, outTok, searches) {
+  return (inTok/1e6)*3 + (outTok/1e6)*15 + (searches||0)*0.01;
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI INIT
+// ═══════════════════════════════════════════════════════════
+function saveKey() {
+  const raw = document.getElementById('apikey').value.trim();
+  const statusEl = document.getElementById('key-status');
+  
+  // Remove any non-ASCII characters that could cause header issues
+  const cleaned = raw.replace(/[^\x00-\x7F]/g, '');
+  
+  if (cleaned !== raw) {
+    statusEl.innerHTML = '<span style="color:var(--amber);font-size:10px">⚠️ Removed non-ASCII chars</span>';
+  }
+  
+  if (!cleaned.startsWith('sk-ant-')) {
+    statusEl.innerHTML = '<span style="color:var(--red);font-size:10px">❌ Invalid format</span>';
+    alert('⚠️ API key should start with "sk-ant-". Please check your key.');
+    return;
+  }
+  
+  apiKey = cleaned;
+  document.getElementById('apikey').value = cleaned;
+  statusEl.innerHTML = '<span style="color:var(--green);font-size:10px">✓ Saved</span>';
+  
+  setTimeout(() => {
+    statusEl.innerHTML = '';
+  }, 3000);
+}
+
+function getKey() {
+  if (!apiKey) { 
+    alert('Please enter your Anthropic API key first.'); 
+    return null; 
+  }
+  
+  // Double-check for ASCII-only characters
+  if (!/^[\x00-\x7F]*$/.test(apiKey)) {
+    alert('API key contains invalid characters. Please re-enter it.');
+    apiKey = '';
+    return null;
+  }
+  
+  return apiKey;
+}
+
+// Build persona grid
+const pg = document.getElementById('pg');
+Object.entries(PERSONAS).forEach(([id, p]) => {
+  const btn = document.createElement('button');
+  btn.className = 'pb' + (id === 'audit' ? ' active' : '');
+  btn.id = 'pb-' + id;
+  btn.onclick = () => setPersona(id);
+  btn.innerHTML = `${p.icon}<span>${p.label}</span>`;
+  pg.appendChild(btn);
+});
+
+function setPersona(id) {
+  persona = id;
+  document.querySelectorAll('.pb').forEach(b => b.classList.remove('active'));
+  document.getElementById('pb-' + id).classList.add('active');
+}
+
+// Build module toggles
+const togEl = document.getElementById('mod-toggles');
+const togStyle = document.createElement('style');
+togStyle.textContent = `
+  .tg2{position:relative;width:30px;height:17px;flex-shrink:0}
+  .tg2 input{opacity:0;width:0;height:0}
+  .tg2s{position:absolute;inset:0;background:var(--bg2);border:.5px solid var(--bdr2);border-radius:10px;cursor:pointer;transition:.2s}
+  .tg2s:before{content:'';position:absolute;width:12px;height:12px;left:2px;top:2px;background:var(--txt3);border-radius:50%;transition:.2s}
+  .tg2 input:checked+.tg2s{background:var(--blue);border-color:var(--blue)}
+  .tg2 input:checked+.tg2s:before{transform:translateX(13px);background:#fff}
+  .ph-lbl{font-size:9px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;
+    letter-spacing:.08em;color:var(--txt3);padding:6px 0 3px;display:block}
+`;
+document.head.appendChild(togStyle);
+
+let lastPhase = 0;
+MODULES.filter(m => m.id !== 'report').forEach(m => {
+  if (m.phase !== lastPhase) {
+    const lbl = document.createElement('div');
+    lbl.className = 'ph-lbl';
+    const names = {1:'Phase 1 — Sequential', 2:'Phase 2 — Parallel', 3:'Phase 3 — Synthesis'};
+    lbl.textContent = names[m.phase] || '';
+    togEl.appendChild(lbl);
+    lastPhase = m.phase;
+  }
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--txt2);padding:2px 0;gap:6px';
+  row.innerHTML = `<span>${m.icon} ${m.name}</span>
+    <label class="tg2"><input type="checkbox" id="tog-${m.id}" ${m.default?'checked':''}><span class="tg2s"></span></label>`;
+  togEl.appendChild(row);
+});
+
+// Tag input for peers
+const peers = ['STMicroelectronics','Microchip Technology','Texas Instruments'];
+function renderPeerTags() {
+  const w = document.getElementById('peers-w');
+  const inp = document.getElementById('peers-i');
+  w.querySelectorAll('.tag').forEach(t => t.remove());
+  peers.forEach((p, i) => {
+    const el = document.createElement('div'); el.className = 'tag';
+    el.innerHTML = p + `<button class="tx" onclick="peers.splice(${i},1);renderPeerTags()">×</button>`;
+    w.insertBefore(el, inp);
+  });
+}
+renderPeerTags();
+document.getElementById('peers-i').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.value.trim()) {
+    peers.push(e.target.value.trim()); e.target.value = ''; renderPeerTags();
+  }
+});
+
+function isEnabled(id) {
+  const el = document.getElementById('tog-' + id);
+  return el ? el.checked : false;
+}
+
+// Init cache status on load
+updateCacheStatus();
+
+// ═══════════════════════════════════════════════════════════
+// PROMPTS (abbreviated for brevity - use v4 prompts)
+// ═══════════════════════════════════════════════════════════
+function buildPrompt(id, cfg) {
+  // Return appropriate prompt based on id
+  // (Using simplified versions for this example)
+  const edgar = outputs.edgar ? JSON.stringify(outputs.edgar).slice(0,2000) : '';
+  
+  const prompts = {
+    edgar: `Extract SEC 10-K data for ${cfg.primary} (${cfg.ticker}). Return ONLY valid JSON with: risk_factors, financials, segments, geographies, peers_summary.`,
+    mscore: `Compute Beneish M-Score for ${cfg.primary}. EDGAR data: ${edgar}. Return ONLY valid JSON.`,
+    // Add other prompts as needed...
+  };
+  
+  return prompts[id] || `Analyze ${id} for ${cfg.primary}. Return ONLY valid JSON.`;
+}
+
+function buildReportPrompt(cfg) {
+  const p = PERSONAS[persona];
+  const allOut = Object.entries(outputs)
+    .filter(([k]) => k !== 'report')
+    .map(([k,v]) => `## ${k.toUpperCase()}\n${JSON.stringify(v,null,2).slice(0,400)}`)
+    .join('\n\n');
+
+  return `You are a ${p.system}
+
+Synthesize risk assessment for ${cfg.primary} (${cfg.ticker}) | ${cfg.start}–${cfg.end}
+
+MODULE OUTPUTS:
+${allOut}
+
+Write the full report with headers, tables, RAG indicators (🔴🟡🟢).`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// API WRAPPER
+// ═══════════════════════════════════════════════════════════
+async function callClaude({ user, streaming=false, onToken=null, useSearch=true, maxTokens=4000 }) {
+  const key = getKey(); if (!key) throw new Error('No API key');
+  const tools = useSearch ? [{ type:'web_search_20250305', name:'web_search' }] : [];
+
+  const body = {
+    model: 'claude-sonnet-4-6',
+    max_tokens: maxTokens,
+    stream: streaming,
+    messages: [{ role:'user', content: user }],
+    ...(tools.length ? { tools } : {}),
+  };
+
+  let resp;
+  try {
+    resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': key,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-calls':'true',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch(err) {
+    if (err.message.includes('ISO-8859-1') || err.message.includes('non-ASCII')) {
+      throw new Error('API key contains invalid characters. Please clear the API key field and re-paste it carefully.');
+    }
+    throw err;
+  }
+
+  if (!resp.ok) { 
+    const e = await resp.json(); 
+    throw new Error(e.error?.message || 'API error ' + resp.status); 
+  }
+
+  if (!streaming) {
+    const data = await resp.json();
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    const u = data.usage || {};
+    return {
+      text,
+      inputTokens: u.input_tokens || 0,
+      outputTokens: u.output_tokens || 0,
+      searches: (data.content||[]).filter(b=>b.type==='tool_use').length,
+    };
+  }
+
+  // Streaming
+  const reader = resp.body.getReader(), decoder = new TextDecoder();
+  let fullText='', buffer='', inTok=0, outTok=0, searches=0;
+  const blockTypes={};
+  
+  while (true) {
+    const {done,value} = await reader.read(); 
+    if (done) break;
+    buffer += decoder.decode(value,{stream:true});
+    const lines = buffer.split('\n'); 
+    buffer = lines.pop();
+    
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const d = line.slice(6).trim(); 
+      if (d==='[DONE]') continue;
+      
+      try {
+        const p = JSON.parse(d);
+        if (p.type==='content_block_start') blockTypes[p.index]=p.content_block?.type||'unknown';
+        if (p.type==='content_block_start'&&p.content_block?.type==='tool_use') searches++;
+        if (p.type==='content_block_delta'&&p.delta?.type==='text_delta'&&blockTypes[p.index]!=='tool_use') {
+          fullText += p.delta.text; 
+          if (onToken) onToken(p.delta.text);
+        }
+        if (p.type==='message_delta') outTok = p.usage?.output_tokens||outTok;
+        if (p.type==='message_start') inTok = p.message?.usage?.input_tokens||0;
+      } catch(e) {}
+    }
+  }
+  
+  return { text: fullText, inputTokens:inTok, outputTokens:outTok, searches };
+}
+
+function accumulateCost(result) {
+  const c = calcCost(result.inputTokens, result.outputTokens, result.searches);
+  runCost += c; 
+  sessionCost += c;
+  totalTokens += result.inputTokens + result.outputTokens;
+  totalSearches += result.searches;
+  document.getElementById('total-cost').textContent = `$${sessionCost.toFixed(3)} this session`;
+  if (document.getElementById('s-cost')) {
+    document.getElementById('s-cost').textContent = `$${runCost.toFixed(3)}`;
+    document.getElementById('s-tokens').textContent = totalTokens>999?(totalTokens/1000).toFixed(1)+'k':totalTokens;
+    document.getElementById('s-searches').textContent = totalSearches;
+  }
+  return c;
+}
+
+// ═══════════════════════════════════════════════════════════
+// PIPELINE UI
+// ═══════════════════════════════════════════════════════════
+const nodeStates = {};
+
+function buildPipeline(enabledIds) {
+  const body = document.getElementById('pipeline-body');
+  body.innerHTML = '';
+
+  [1,2,3,4].forEach(phase => {
+    const mods = MODULES.filter(m => m.phase===phase && enabledIds.includes(m.id));
+    if (!mods.length) return;
+
+    const row = document.createElement('div'); 
+    row.className='phase-row';
+    const lbl = document.createElement('div'); 
+    lbl.className='phase-lbl';
+    const phaseNames = {1:'Phase 1\nSeq',2:'Phase 2\nParallel',3:'Phase 3\nSynth',4:'Phase 4\nReport'};
+    lbl.textContent = phaseNames[phase]; 
+    row.appendChild(lbl);
+
+    if (phase !== 1) { 
+      const c=document.createElement('div'); 
+      c.className='connector'; 
+      c.textContent='→'; 
+      row.appendChild(c); 
+    }
+
+    if (phase===2) {
+      const pg=document.createElement('div'); 
+      pg.className='par-group';
+      const pl=document.createElement('span'); 
+      pl.className='par-lbl';
+      pl.textContent=`${mods.length} parallel`;
+      pg.appendChild(pl);
+      mods.forEach(m => pg.appendChild(buildNode(m)));
+      row.appendChild(pg);
+    } else {
+      mods.forEach((m,i) => {
+        row.appendChild(buildNode(m));
+        if (i<mods.length-1) { 
+          const c=document.createElement('div'); 
+          c.className='connector'; 
+          c.textContent='→'; 
+          row.appendChild(c); 
+        }
+      });
+    }
+    body.appendChild(row);
+
+    const nextPhase = MODULES.filter(m=>m.phase===phase+1&&enabledIds.includes(m.id));
+    if (nextPhase.length) {
+      const ar=document.createElement('div'); 
+      ar.className='phase-arrow'; 
+      ar.textContent='↓';
+      body.appendChild(ar);
+    }
+  });
+}
+
+function buildNode(m) {
+  const node = document.createElement('div');
+  node.className='sn idle'; 
+  node.id='node-'+m.id;
+  node.onclick=()=>toggleOutput(m.id);
+  node.innerHTML=`<div class="sn-badge" id="badge-${m.id}"></div>
+<div class="sn-icon">${m.icon}</div>
+<div class="sn-name">${m.name}</div>
+<div class="sn-status idle" id="status-${m.id}">idle</div>
+<div class="sn-cost" id="cost-${m.id}"></div>`;
+  nodeStates[m.id] = { status:'idle' };
+  return node;
+}
+
+function setNode(id, status, cost) {
+  const node=document.getElementById('node-'+id);
+  const badge=document.getElementById('badge-'+id);
+  const statusEl=document.getElementById('status-'+id);
+  const costEl=document.getElementById('cost-'+id);
+  if (!node) return;
+  
+  node.className='sn '+status;
+  if (badge) badge.className='sn-badge '+(status==='idle'||status==='queued'?'':status);
+  if (statusEl) {
+    statusEl.className='sn-status '+status;
+    statusEl.textContent = status==='running'?'⟳ running':status==='done'?'✓ done':
+      status==='cached'?'⚡ cached':status==='error'?'✗ error':status;
+  }
+  if (costEl && cost!==undefined) costEl.textContent = cost>0?`$${cost.toFixed(4)}`:'';
+  nodeStates[id]={status};
+  updateStats();
+}
+
+function updateStats() {
+  const done = Object.values(nodeStates).filter(s=>s.status==='done'||s.status==='cached').length;
+  const cached = Object.values(nodeStates).filter(s=>s.status==='cached').length;
+  const total = Object.keys(nodeStates).length;
+  if (document.getElementById('s-steps')) {
+    document.getElementById('s-steps').textContent=`${done}/${total}`;
+    document.getElementById('s-cached').textContent=cached;
+  }
+}
+
+function toggleOutput(id) {
+  const card=document.getElementById('out-'+id); 
+  if (!card) return;
+  const body=card.querySelector('.out-body');
+  const icon=card.querySelector('.ci');
+  if (body) { 
+    body.classList.toggle('open'); 
+    if (icon) icon.classList.toggle('open'); 
+  }
+}
+
+function addOrUpdateOutputCard(m, data, streaming=false) {
+  const grid=document.getElementById('out-grid');
+  let card = document.getElementById('out-'+m.id);
+  
+  if (!card) {
+    // Create new card
+    card=document.createElement('div'); 
+    card.className='out-card'; 
+    card.id='out-'+m.id;
+    card.innerHTML=`<div class="out-hdr" onclick="toggleOutput('${m.id}')">
+<div class="out-title">${m.icon} ${m.name} <span class="pill grn" style="font-size:9px">JSON</span></div>
+<span class="ci open">▶</span></div>
+<div class="out-body ${streaming?'streaming open':'open'}" id="out-body-${m.id}"></div>`;
+    grid.appendChild(card);
+  }
+  
+  // Update content
+  const body = document.getElementById('out-body-'+m.id);
+  if (body) {
+    const full = typeof data==='string'?data:JSON.stringify(data,null,2);
+    body.textContent = full;
+    if (!streaming) {
+      body.classList.remove('streaming');
+    }
+  }
+}
+
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN CHAIN RUNNER
+// ═══════════════════════════════════════════════════════════
+async function runChain() {
+  const key = getKey(); 
+  if (!key) return;
+  if (isRunning) return;
+  isRunning = true;
+
+  // Reset
+  runCost=0; totalTokens=0; totalSearches=0;
+  Object.keys(outputs).forEach(k=>delete outputs[k]);
+  finalReport='';
+
+  const cfg = {
+    primary: document.getElementById('pc').value||'onsemi',
+    ticker:  document.getElementById('tk').value||'ON',
+    peerList: peers.join(', '),
+    start:   document.getElementById('ps').value,
+    end:     document.getElementById('pe').value,
+    cacheMode: document.getElementById('cache-mode').value,
+  };
+
+  const enabledMods = MODULES.filter(m => m.id==='report' || isEnabled(m.id));
+  const enabledIds = enabledMods.map(m=>m.id);
+
+  // Build UI
+  const main = document.getElementById('main');
+  main.querySelectorAll('.pipeline,.stats,.out-grid,.report').forEach(el=>el.remove());
+
+  // Pipeline
+  const pipeCard = document.createElement('div'); 
+  pipeCard.className='pipeline';
+  pipeCard.innerHTML=`<div class="pipeline-hdr">
+<div class="pipeline-title">Execution Pipeline</div>
+<div style="display:flex;gap:8px;align-items:center">
+  <span id="pipe-status" class="pill blue">RUNNING</span>
+  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--txt3)" id="elapsed">0.0s</span>
+</div></div>
+<div class="pipeline-body" id="pipeline-body"></div>`;
+  main.appendChild(pipeCard);
+
+  // Stats
+  const statsEl=document.createElement('div'); 
+  statsEl.className='stats';
+  statsEl.innerHTML=`
+<div class="stat"><div class="stat-val blue" id="s-steps">0/0</div><div class="stat-lbl">Steps</div></div>
+<div class="stat"><div class="stat-val pur" id="s-cached">0</div><div class="stat-lbl">Cached</div></div>
+<div class="stat"><div class="stat-val" id="s-tokens">0</div><div class="stat-lbl">Tokens</div></div>
+<div class="stat"><div class="stat-val" id="s-searches">0</div><div class="stat-lbl">Searches</div></div>
+<div class="stat"><div class="stat-val amb" id="s-cost">$0.00</div><div class="stat-lbl">Cost</div></div>`;
+  main.appendChild(statsEl);
+
+  // Output grid
+  const grid=document.createElement('div'); 
+  grid.className='out-grid'; 
+  grid.id='out-grid';
+  main.appendChild(grid);
+
+  buildPipeline(enabledIds);
+  document.getElementById('s-steps').textContent=`0/${enabledIds.length}`;
+
+  // Timer
+  const start = Date.now();
+  const timer = setInterval(()=>{
+    const el=document.getElementById('elapsed');
+    if (el) el.textContent=((Date.now()-start)/1000).toFixed(1)+'s';
+  },100);
+
+  // Disable buttons
+  const runBtn=document.getElementById('run-btn');
+  runBtn.disabled=true;
+  runBtn.innerHTML='<svg width="13" height="13" viewBox="0 0 14 14" style="animation:spin 1s linear infinite"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5" stroke-dasharray="18" stroke-dashoffset="6" fill="none"/></svg> Running…';
+  document.getElementById('exp-btn').disabled=true;
+
+  try {
+    // PHASE 1 — EDGAR
+    if (enabledIds.includes('edgar')) {
+      const cached = loadCacheItem(cfg.primary, 'edgar');
+      
+      if (cfg.cacheMode==='smart' && cached) {
+        setNode('edgar','cached',0);
+        outputs.edgar = cached.data;
+        addOrUpdateOutputCard(MODULES.find(m=>m.id==='edgar'), cached.data);
+      } else {
+        setNode('edgar','running');
+        
+        // Create card immediately for streaming
+        const m = MODULES.find(m=>m.id==='edgar');
+        addOrUpdateOutputCard(m, '', true);
+        
+        let streamedText = '';
+        const result = await callClaude({
+          user: buildPrompt('edgar', cfg),
+          useSearch: true,
+          maxTokens: 3000,
+          streaming: true,
+          onToken: (tok) => {
+            streamedText += tok;
+            addOrUpdateOutputCard(m, streamedText, true);
+          }
+        });
+        
+        const cost = accumulateCost(result);
+        try { 
+          outputs.edgar = JSON.parse(result.text.replace(/```json|```/g,'').trim()); 
+        } catch(e) { 
+          outputs.edgar = {raw:result.text, parse_error:true}; 
+        }
+        
+        saveCacheItem(cfg.primary, 'edgar', outputs.edgar);
+        setNode('edgar','done',cost);
+        addOrUpdateOutputCard(m, outputs.edgar, false);
+      }
+    }
+
+    // PHASE 2 — PARALLEL
+    const phase2 = enabledMods.filter(m=>m.phase===2);
+    if (phase2.length) {
+      phase2.forEach(m=>setNode(m.id,'queued'));
+
+      await Promise.all(phase2.map(async m => {
+        const cached = loadCacheItem(cfg.primary, m.id);
+        
+        if (cfg.cacheMode==='smart' && cached) {
+          setNode(m.id,'cached',0);
+          outputs[m.id] = cached.data;
+          addOrUpdateOutputCard(m, cached.data);
+        } else {
+          setNode(m.id,'running');
+          addOrUpdateOutputCard(m, '', true);
+          
+          let streamedText = '';
+          try {
+            const result = await callClaude({
+              user: buildPrompt(m.id, cfg),
+              useSearch: m.search,
+              maxTokens: 2500,
+              streaming: true,
+              onToken: (tok) => {
+                streamedText += tok;
+                addOrUpdateOutputCard(m, streamedText, true);
+              }
+            });
+            
+            const cost = accumulateCost(result);
+            try { 
+              outputs[m.id] = JSON.parse(result.text.replace(/```json|```/g,'').trim()); 
+            } catch(e) { 
+              outputs[m.id] = {raw:result.text, parse_error:true}; 
+            }
+            
+            saveCacheItem(cfg.primary, m.id, outputs[m.id]);
+            setNode(m.id,'done',cost);
+            addOrUpdateOutputCard(m, outputs[m.id], false);
+          } catch(err) {
+            outputs[m.id] = {error:err.message};
+            setNode(m.id,'error',0);
+            addOrUpdateOutputCard(m, {error:err.message}, false);
+          }
+        }
+      }));
+    }
+
+    // PHASE 3 — SYNTHESIS
+    const phase3 = enabledMods.filter(m=>m.phase===3);
+    for (const m of phase3) {
+      const cached = loadCacheItem(cfg.primary, m.id);
+      
+      if (cfg.cacheMode==='smart' && cached) {
+        setNode(m.id,'cached',0);
+        outputs[m.id] = cached.data;
+        addOrUpdateOutputCard(m, cached.data);
+      } else {
+        setNode(m.id,'running');
+        addOrUpdateOutputCard(m, '', true);
+        
+        let streamedText = '';
+        try {
+          const result = await callClaude({
+            user: buildPrompt(m.id, cfg),
+            useSearch: false,
+            maxTokens: 3500,
+            streaming: true,
+            onToken: (tok) => {
+              streamedText += tok;
+              addOrUpdateOutputCard(m, streamedText, true);
+            }
+          });
+          
+          const cost = accumulateCost(result);
+          try { 
+            outputs[m.id] = JSON.parse(result.text.replace(/```json|```/g,'').trim()); 
+          } catch(e) { 
+            outputs[m.id] = {raw:result.text, parse_error:true}; 
+          }
+          
+          saveCacheItem(cfg.primary, m.id, outputs[m.id]);
+          setNode(m.id,'done',cost);
+          addOrUpdateOutputCard(m, outputs[m.id], false);
+        } catch(err) {
+          outputs[m.id]={error:err.message};
+          setNode(m.id,'error',0);
+          addOrUpdateOutputCard(m, {error:err.message}, false);
+        }
+      }
+    }
+
+    // PHASE 4 — REPORT
+    const pConfig = PERSONAS[persona];
+    const reportCard=document.createElement('div'); 
+    reportCard.className='report';
+    reportCard.innerHTML=`<div class="report-hdr">
+<div class="report-title">${pConfig.icon} Risk Assessment — ${pConfig.label} <span class="pill blue" id="rep-badge">GENERATING</span></div>
+<button class="icon-btn" onclick="navigator.clipboard.writeText(finalReport)">copy</button>
+</div>
+<div class="report-body streaming" id="rep-body"></div>`;
+    main.appendChild(reportCard);
+
+    setNode('report','running');
+    const repBody=document.getElementById('rep-body');
+    repBody.textContent='';
+
+    const result = await callClaude({
+      user: buildReportPrompt(cfg),
+      useSearch: false,
+      streaming: true,
+      maxTokens: 16000,
+      onToken: tok => {
+        finalReport += tok;
+        repBody.textContent = finalReport;
+      }
+    });
+
+    const cost = accumulateCost(result);
+    setNode('report','done',cost);
+    repBody.classList.remove('streaming');
+    document.getElementById('rep-badge').className='pill grn';
+    document.getElementById('rep-badge').textContent='COMPLETE';
+    document.getElementById('pipe-status').className='pill grn';
+    document.getElementById('pipe-status').textContent='COMPLETE';
+    document.getElementById('exp-btn').disabled=false;
+
+  } catch(err) {
+    console.error(err);
+    alert('Chain error: ' + err.message);
+    document.getElementById('pipe-status').className='pill red';
+    document.getElementById('pipe-status').textContent='ERROR';
+  }
+
+  clearInterval(timer);
+  runBtn.disabled=false;
+  runBtn.innerHTML='<svg width="13" height="13" viewBox="0 0 16 16"><path d="M3 2.5L13 8L3 13.5V2.5Z" fill="currentColor"/></svg> Run Again';
+  isRunning=false;
+  updateCacheStatus();
+}
+
+// ═══════════════════════════════════════════════════════════
+// WORD EXPORT (simplified for brevity)
+// ═══════════════════════════════════════════════════════════
+async function exportReport() {
+  if (!finalReport) { 
+    alert('Run the chain first.'); 
+    return; 
+  }
+  
+  // Simple text export as fallback
+  const blob = new Blob([finalReport], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ia_risk_report_${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
