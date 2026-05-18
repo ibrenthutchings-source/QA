@@ -61,18 +61,23 @@ class GroundedDataResponse(BaseModel):
 async def get_cik_from_ticker(ticker: str) -> str:
     """Matches a standard stock ticker to the SEC's CIK number."""
     url = "https://www.sec.gov/files/company_tickers.json"
-    async with httpx.AsyncClient(headers=SEC_HEADERS) as client:
-        response = await client.get(url)
-        if response.status_code != 200:
-            raise HTTPException(status_code=502, detail="Failed to reach SEC tickers database.")
-        
-        data = response.json()
-        for key, value in data.items():
-            if value['ticker'].upper() == ticker.upper():
-                # SEC APIs require the CIK to be zero-padded to 10 digits
-                return str(value['cik_str']).zfill(10)
-        
-        raise HTTPException(status_code=404, detail=f"Ticker {ticker} not found in SEC database.")
+    try:
+        async with httpx.AsyncClient(headers=SEC_HEADERS, timeout=10) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"Failed to reach SEC tickers database. Status: {response.status_code}")
+            
+            data = response.json()
+            for key, value in data.items():
+                if value['ticker'].upper() == ticker.upper():
+                    # SEC APIs require the CIK to be zero-padded to 10 digits
+                    return str(value['cik_str']).zfill(10)
+            
+            raise HTTPException(status_code=404, detail=f"Ticker {ticker} not found in SEC database.")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=502, detail=f"Error fetching ticker data: {str(e)}")
 
 async def fetch_xbrl_concept(cik: str, concept: str) -> Dict[str, Any]:
     """Fetches specific GAAP concepts (e.g., Revenues, GrossProfit) from SEC."""
