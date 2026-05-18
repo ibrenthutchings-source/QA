@@ -179,6 +179,19 @@ async def get_grounded_entity_data(ticker: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/")
+async def root():
+    return {
+        "message": "Dendrai Enterprise Risk Platform - Backend API",
+        "description": "Extracts factual XBRL data and 10-K text from SEC EDGAR",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/health",
+            "grounding": "/api/v1/grounding/{ticker}"
+        },
+        "example": "/api/v1/grounding/AAPL"
+    }
+
 @app.get("/health")
 async def health_check():
     return {"status": "online", "engine": "Dendrai Quantitative Grounding API v1.0"}
